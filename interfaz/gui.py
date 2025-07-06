@@ -4,6 +4,7 @@ import cv2
 from PIL import Image, ImageTk
 import threading
 import time
+import mediapipe as mp
 
 class App:
     def __init__(self, root):
@@ -13,6 +14,10 @@ class App:
         self.root.resizable(False, False)
 
         self.running = False
+        # Inicializar detector de rostros
+        self.mp_face = mp.solutions.face_detection
+        self.mp_drawing = mp.solutions.drawing_utils
+        self.face_detection = self.mp_face.FaceDetection(model_selection=0, min_detection_confidence=0.6)
         self.cap = None
 
         # Video frame
@@ -47,23 +52,39 @@ class App:
             self.cap.release()
         self.video_label.config(image='')
 
+    
     def mostrar_video(self):
         while self.running and self.cap.isOpened():
             ret, frame = self.cap.read()
             if not ret:
                 continue
 
-            # Conversión y resize para optimizar
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, (640, 480))
+            # Flip para efecto espejo (opcional)
+            frame = cv2.flip(frame, 1)
 
+            # Conversión para Mediapipe
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self.face_detection.process(rgb_frame)
+
+            # Dibujar detecciones
+            if results.detections:
+                for detection in results.detections:
+                    bbox = detection.location_data.relative_bounding_box
+                    h, w, _ = frame.shape
+                    x, y = int(bbox.xmin * w), int(bbox.ymin * h)
+                    width, height = int(bbox.width * w), int(bbox.height * h)
+                    cv2.rectangle(frame, (x, y), (x + width, y + height), (0, 255, 0), 2)
+
+            # Convertir a imagen para Tkinter
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(frame)
             imgtk = ImageTk.PhotoImage(image=img)
 
             self.video_label.imgtk = imgtk
             self.video_label.config(image=imgtk)
 
-            time.sleep(0.03)  # ~30 fps
+            time.sleep(0.03)  # ~30 FPS
+
 
 # Ejecutar
 if __name__ == "__main__":

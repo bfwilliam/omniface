@@ -1,7 +1,7 @@
 from datetime import datetime
+from deepface import DeepFace
 import os
 import csv
-import datetime
 import cv2
 
 # Ruta del archivo de registro
@@ -60,3 +60,22 @@ def guardar_rostro_desconocido(imagen):
         print(f"[💾] Rostro desconocido guardado en: {ruta_archivo}")
     except Exception as e:
         print(f"[!] Error al guardar rostro desconocido: {e}")
+
+def cargar_rostros_conocidos(directorio="rostros_conocidos"):
+    rostros = []
+    if not os.path.exists(directorio):
+        print(f"[WARN] Directorio {directorio} no encontrado.")
+        return rostros
+
+    for archivo in os.listdir(directorio):
+        if archivo.endswith((".jpg", ".png", ".jpeg")):
+            ruta = os.path.join(directorio, archivo)
+            try:
+                embedding = DeepFace.represent(img_path=ruta, model_name="Facenet")[0]["embedding"]
+                nombre = os.path.splitext(archivo)[0]
+                rostros.append({"nombre": nombre, "embedding": embedding})
+                print(f"[OK] Rostro cargado: {nombre}")
+            except Exception as e:
+                print(f"[ERROR] No se pudo cargar {archivo}: {e}")
+    
+    return rostros
