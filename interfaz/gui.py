@@ -1,3 +1,5 @@
+import os
+import sys
 import tkinter as tk
 from tkinter import ttk
 import cv2
@@ -5,6 +7,14 @@ from PIL import Image, ImageTk
 import threading
 import time
 import mediapipe as mp
+
+# Agregar el directorio raíz del proyecto al sys.path
+PROYECTO_RAIZ = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROYECTO_RAIZ not in sys.path:
+    sys.path.insert(0, PROYECTO_RAIZ)
+
+from utils.helpers import cargar_rostros_conocidos
+
 
 class App:
     def __init__(self, root):
@@ -37,6 +47,9 @@ class App:
         # Footer
         self.footer = ttk.Label(self.root, text="Proyecto de Reconocimiento Facial - IESTP JDS", font=("Segoe UI", 10))
         self.footer.pack(pady=10)
+
+        # Carga de rostros
+        self.rostros_conocidos = cargar_rostros_conocidos()
 
     def iniciar_camara(self):
         if not self.running:
