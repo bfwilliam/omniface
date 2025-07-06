@@ -1,5 +1,3 @@
-# reconocedor/entrenar_embeds.py
-
 import os
 import cv2
 import pickle
