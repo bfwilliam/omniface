@@ -26,3 +26,23 @@ def reconocer_uno(rostro, lista_referencia, umbral=0.3):
         except Exception:
             continue
     return "Desconocido"
+
+def reconocer_rostro(cara, carpeta_rostros='rostros_conocidos', umbral=0.35):
+    """
+    Compara una imagen de rostro con todos los rostros conocidos usando DeepFace.find().
+    Retorna el nombre del rostro si se encuentra por debajo del umbral de similitud.
+    """
+    try:
+        resultados = DeepFace.find(img_path=cara, db_path=carpeta_rostros, enforce_detection=False, silent=True)
+        
+        if resultados and not resultados[0].empty:
+            top_result = resultados[0].iloc[0]
+            distancia = top_result['distance']
+            nombre = top_result['identity'].split("/")[-1].split(".")[0]
+
+            if distancia < umbral:
+                return nombre
+    except Exception as e:
+        print(f"Error en reconocimiento: {e}")
+    
+    return "Desconocido"

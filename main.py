@@ -1,88 +1,79 @@
 import cv2
 import os
-import csv
+import numpy as np
 from datetime import datetime
-from deepface import DeepFace
+#from detectores.detector_haar import detectar_rostros
+from detectores.detector_mediapipe import detectar_rostros_mediapipe as detectar_rostros
 
-from utils.helpers import generar_nombre_archivo, asegurar_directorio
+from reconocedor.reconocedor import reconocer_rostro
+import pandas as pd
 
-# Rutas
-carpeta_rostros = "rostros_conocidos"
-carpeta_registro = "registros"
-archivo_registro = os.path.join(carpeta_registro, "registro.csv")
-carpeta_desconocidos = "desconocidos"
+# Crear carpeta de registros si no existe
+os.makedirs("registros", exist_ok=True)
+archivo_csv = "registros/registro.csv"
 
-# Asegurar carpetas
-asegurar_directorio(carpeta_registro)
-asegurar_directorio(carpeta_desconocidos)
+# Crear archivo CSV si no existe
+if not os.path.exists(archivo_csv):
+    with open(archivo_csv, "w") as f:
+        f.write("nombre,fecha,hora\n")
 
-# Inicializar cámara
+# Cargar cámara
 cap = cv2.VideoCapture(0)
+rostros_registrados = set()
 
-# Cargar clasificador Haar
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+print("[INFO] Iniciando sistema de reconocimiento OmniFace...")
 
-# Cargar imágenes conocidas
-rostros_conocidos = []
-nombres_conocidos = []
-
-for archivo in os.listdir(carpeta_rostros):
-    if archivo.endswith(".jpg") or archivo.endswith(".png"):
-        ruta = os.path.join(carpeta_rostros, archivo)
-        rostro = cv2.imread(ruta)
-        if rostro is not None:
-            rostros_conocidos.append(rostro)
-            nombres_conocidos.append(os.path.splitext(archivo)[0])
-
-# Set para evitar duplicados por sesión
-personas_registradas = set()
-
-# Iniciar bucle
 while True:
     ret, frame = cap.read()
     if not ret:
         break
 
-    gris = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    rostros = face_cascade.detectMultiScale(gris, scaleFactor=1.1, minNeighbors=5)
+    caras = detectar_rostros(frame)
 
-    for (x, y, w, h) in rostros:
+    for (x, y, w, h) in caras:
         rostro = frame[y:y+h, x:x+w]
-        nombre_persona = "Desconocido"
+        if rostro is not None and rostro.size > 0:
+            # Guardar imagen temporal para pasar a DeepFace.find()
+            temp_path = "temp.jpg"
+            cv2.imwrite(temp_path, rostro)
 
-        try:
-            for i, rostro_conocido in enumerate(rostros_conocidos):
-                resultado = DeepFace.verify(rostro, rostro_conocido, enforce_detection=False)
-                if resultado["verified"]:
-                    nombre_persona = nombres_conocidos[i]
-                    break
-        except Exception as e:
-            print("Error en reconocimiento:", e)
+            nombre = reconocer_rostro(temp_path)
 
-        # Enmarcar rostro con color según sea conocido o no
-        color = (0, 255, 0) if nombre_persona != "Desconocido" else (0, 0, 255)
-        cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
-        cv2.putText(frame, nombre_persona, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+            # Colores según reconocimiento
+            color = (0, 255, 0) if nombre != "Desconocido" else (0, 0, 255)
+            etiqueta = nombre
 
-        # Registro de persona si no se ha registrado ya
-        if nombre_persona not in personas_registradas:
-            hora_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            with open(archivo_registro, mode='a', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow([nombre_persona, hora_actual])
-            personas_registradas.add(nombre_persona)
+            # Dibujar rectángulo y nombre
+            cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+            cv2.putText(frame, etiqueta, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
-        # Guardar imagen de rostro desconocido
-        if nombre_persona == "Desconocido":
-            rostro_guardado = frame[y:y+h, x:x+w]
-            nombre_archivo = generar_nombre_archivo(base="desconocido")
-            ruta_guardado = os.path.join(carpeta_desconocidos, nombre_archivo)
-            cv2.imwrite(ruta_guardado, rostro_guardado)
+            # Registrar solo si no se ha registrado antes en la sesión
+            if nombre not in rostros_registrados:
+                hora = datetime.now().strftime("%H:%M:%S")
+                fecha = datetime.now().strftime("%Y-%m-%d")
+                with open(archivo_csv, "a") as f:
+                    f.write(f"{nombre},{fecha},{hora}\n")
+                rostros_registrados.add(nombre)
 
-    # Mostrar fecha y hora en pantalla
-    hora_texto = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cv2.putText(frame, hora_texto, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                if nombre == "Desconocido":
+                    # Guardar rostro desconocido en subrcarpetas con fecha y hora
+                    carpeta_dia = os.path.join("rostros_desconocidos", fecha)
+                    os.makedirs(carpeta_dia, exist_ok=True)
+                    nombre_archivo = f"Desconocido_{hora.replace(':', '-')}.jpg"
+                    cv2.imwrite(os.path.join(carpeta_dia, nombre_archivo), rostro)
+                else:
+                    print("⚠️ Rostro detectado, pero no válido para recorte. Se omitió.")
+            # Opcional: eliminar imagen temporal
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
+    # Mostrar hora y fecha
+    hora_actual = datetime.now().strftime("%H:%M:%S")
+    fecha_actual = datetime.now().strftime("%Y-%m-%d")
+    cv2.putText(frame, f"{fecha_actual} {hora_actual}", (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    
+    # Mostrar la cámara
     cv2.imshow("Detector de Rostros", frame)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):

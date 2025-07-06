@@ -5,15 +5,16 @@ mp_face_detection = mp.solutions.face_detection
 mp_drawing = mp.solutions.drawing_utils
 
 # Inicializamos el detector
-face_detection = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
+face_detection = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.7)
 
-def detectar_rostros(frame):
+def detectar_rostros_mediapipe(frame):
+    rostros = []
+    h, w, _ = frame.shape
     img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     resultados = face_detection.process(img_rgb)
-    
-    rostros = []
-    if resultados.detections:
-        h, w, _ = frame.shape
+        
+    if resultados and resultados.detections:
+        
         for det in resultados.detections:
             bbox = det.location_data.relative_bounding_box
             x = int(bbox.xmin * w)
@@ -21,6 +22,10 @@ def detectar_rostros(frame):
             ancho = int(bbox.width * w)
             alto = int(bbox.height * h)
             rostros.append((x, y, ancho, alto))
+
+            # Dibujar puntos clave (landmarks) sobre el frame original
+            mp_drawing.draw_detection(frame, det)
+
     return rostros
 
 def dibujar_rostros(frame, rostros, nombres=None):
