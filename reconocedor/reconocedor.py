@@ -27,7 +27,7 @@ def reconocer_uno(rostro, lista_referencia, umbral=0.3):
             continue
     return "Desconocido"
 
-def reconocer_rostro(cara, carpeta_rostros='rostros_conocidos', umbral=0.35):
+def reconocer_rostro(cara, carpeta_rostros='rostros_conocidos', umbral=0.4):
     """
     Compara una imagen de rostro con todos los rostros conocidos usando DeepFace.find().
     Retorna el nombre del rostro si se encuentra por debajo del umbral de similitud.

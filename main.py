@@ -17,8 +17,11 @@ if not os.path.exists(archivo_csv):
     with open(archivo_csv, "w") as f:
         f.write("nombre,fecha,hora\n")
 
-# Cargar cámara
+# Cargar cámara y control de registros
 cap = cv2.VideoCapture(0)
+ultimo_registro = {}
+frame_count = 0
+
 rostros_registrados = set()
 
 print("[INFO] Iniciando sistema de reconocimiento OmniFace...")
@@ -28,11 +31,18 @@ while True:
     if not ret:
         break
 
+    frame_count += 1
     caras = detectar_rostros(frame)
 
     for (x, y, w, h) in caras:
         rostro = frame[y:y+h, x:x+w]
         if rostro is not None and rostro.size > 0:
+            try:
+                # Resize uniforme para reconocimiento
+                rostro = cv2.resize(rostro, (160, 160))
+            except:
+                continue
+
             # Guardar imagen temporal para pasar a DeepFace.find()
             temp_path = "temp.jpg"
             cv2.imwrite(temp_path, rostro)
@@ -74,7 +84,7 @@ while True:
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
     
     # Mostrar la cámara
-    cv2.imshow("Detector de Rostros", frame)
+    cv2.imshow("Detector de Rostros OmniFace", frame)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
