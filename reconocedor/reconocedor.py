@@ -112,3 +112,30 @@ def reconocer_rostro_mp(rostro, rostros_conocidos, umbral=0.35):
 
     except Exception as e:
         print(f"[!] Error en reconocimiento: {e}")
+
+def reconocer_rostro_gui(frame, bbox):
+    try:
+        # Recortar rostro con bbox
+        x, y, w, h = bbox
+        rostro = frame[y:y+h, x:x+w]
+        if rostro.size == 0:
+            return ("Desconocido", bbox)
+
+        resultados = DeepFace.find(
+            img_path=rostro,
+            db_path="rostros_conocidos",
+            enforce_detection=False,
+            silent=True
+        )
+
+        if resultados and isinstance(resultados, list) and not resultados[0].empty:
+            nombre_archivo = resultados[0].iloc[0]['identity'].split("\\")[-1]
+            nombre = nombre_archivo.split(".")[0]
+            return (nombre, bbox)
+        else:
+            return ("Desconocido", bbox)
+
+    except Exception as e:
+        print(f"[!] Error en reconocimiento: {e}")
+        return ("Desconocido", bbox)
+

@@ -26,34 +26,32 @@ def obtener_hora_fecha_actual():
     """Retorna fecha y hora actual como cadena"""
     return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
-def registrar_asistencia(nombre, fecha, hora, archivo='registros/registro.csv'):
-    columnas_esperadas = ["Nombre", "Fecha", "Hora"]
+def registrar_asistencia(nombre, fecha, hora):
+    archivo = "registros/registro.csv"
+    columnas = ["Nombre", "Fecha", "Hora"]
 
-    # Crear archivo si no existe o está mal formado
-    if not os.path.exists(archivo):
-        df = pd.DataFrame(columns=columnas_esperadas)
-        df.to_csv(archivo, index=False)
-    else:
-        try:
-            df = pd.read_csv(archivo)
-            if not all(col in df.columns for col in columnas_esperadas):
-                raise ValueError("Columnas faltantes")
-        except Exception:
-            print("[!] Archivo dañado. Se volverá a crear.")
-            df = pd.DataFrame(columns=columnas_esperadas)
+    try:
+        # Verifica si el archivo existe, si no lo crea con las columnas base
+        if not os.path.exists(archivo):
+            df = pd.DataFrame(columns=columnas)
             df.to_csv(archivo, index=False)
 
-    # Verificar duplicado
-    df = pd.read_csv(archivo)
-    duplicado = df[(df["Nombre"] == nombre) & (df["Fecha"] == fecha)]
+        # Carga el archivo
+        df = pd.read_csv(archivo)
 
-    if duplicado.empty:
-        nuevo_registro = {"Nombre": nombre, "Fecha": fecha, "Hora": hora}
-        df = pd.concat([df, pd.DataFrame([nuevo_registro])], ignore_index=True)
-        df.to_csv(archivo, index=False)
-        print(f"[✓] Asistencia registrada: {nombre} - {fecha} {hora}")
-    else:
-        print(f"[•] Ya se registró asistencia para {nombre} en {fecha}")
+        # Verifica si ya existe el registro con el mismo nombre y fecha
+        duplicado = df[(df["Nombre"] == nombre) & (df["Fecha"] == fecha)]
+
+        if duplicado.empty:
+            nuevo_registro = pd.DataFrame([[nombre, fecha, hora]], columns=columnas)
+            df = pd.concat([df, nuevo_registro], ignore_index=True)
+            df.to_csv(archivo, index=False)
+            print(f"[✔] Asistencia registrada: {nombre} - {fecha} {hora}")
+        else:
+            print(f"[!] Registro duplicado evitado para {nombre} en {fecha}")
+
+    except Exception as e:
+        print(f"[!] Error al registrar asistencia: {e}")
 
 # Opcion funcional sin GUI
 def registrar_asistencia_sg(nombre):
@@ -120,8 +118,21 @@ def guardar_rostro_desconocido(rostro, fecha, hora):
     ruta_completa = os.path.join(RUTA_DESCONOCIDOS, nombre_archivo)
     cv2.imwrite(ruta_completa, rostro)
 
-def verificar_duplicado(nombre, fecha):
-    if not os.path.exists(RUTA_CSV):
+def verificar_duplicado(nombre, fecha, hora):
+    try:
+        if not os.path.exists("registros/registro.csv"):
+            return False
+
+        df = pd.read_csv("registros/registro.csv")
+
+        # Validamos si ya existe un registro con el mismo nombre y fecha
+        duplicado = df[
+            (df["Nombre"] == nombre) &
+            (df["Fecha"] == fecha) &
+            (df["Hora"] == hora)
+        ]
+
+        return not duplicado.empty
+    except Exception as e:
+        print(f"[!] Error al verificar duplicado: {e}")
         return False
-    df = pd.read_csv(RUTA_CSV)
-    return not df[(df["Nombre"] == nombre) & (df["Fecha"] == fecha)].empty
