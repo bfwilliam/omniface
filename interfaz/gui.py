@@ -79,11 +79,13 @@ class App:
     
     def mostrar_video(self):
         ret, frame = self.cap.read()
+        frame = cv2.resize(frame, (640, 480))
         if not ret:
             return
 
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         resultados = self.face_detection.process(frame_rgb)
+        frame_counter = 0
 
         if resultados.detections:
             for detection in resultados.detections:
@@ -103,7 +105,7 @@ class App:
                 
                 if nombre is None or nombre.strip() == "":
                     nombre = "Desconocido"
-                    
+
                 # Color del marco
                 color = (0, 255, 0) if nombre != "Desconocido" else (0, 0, 255)
 

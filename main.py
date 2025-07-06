@@ -4,7 +4,7 @@ import os
 import mediapipe as mp
 import numpy as np
 from reconocedor.reconocedor import reconocer_rostro
-from utils.helpers import registrar_asistencia, obtener_hora_fecha_actual, guardar_rostro_desconocido
+from utils.helpers import guardar_rostro_desconocido_sg, registrar_asistencia, obtener_hora_fecha_actual, guardar_rostro_desconocido, registrar_asistencia_sg
 
 # Configuración
 registrados_en_sesion = set()
@@ -52,9 +52,9 @@ with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence
                 # Registrar solo una vez por sesión
                 if nombre not in registrados_en_sesion:
                     registrados_en_sesion.add(nombre)
-                    registrar_asistencia(nombre)
+                    registrar_asistencia_sg(nombre)
                     if nombre == "Desconocido":
-                        guardar_rostro_desconocido(frame[y:y+h, x:x+w])
+                        guardar_rostro_desconocido_sg(frame[y:y+h, x:x+w])
 
         cv2.imshow("Detector de Presencia", frame)
         if cv2.waitKey(1) & 0xFF == 27:  # ESC para salir
