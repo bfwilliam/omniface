@@ -51,6 +51,30 @@ def actualizar_historial():
     for nombre, total in historial.items():
         historial_listbox.insert(tk.END, f"{nombre} ({total} imágenes)")
 
+def eliminar_usuario():
+    seleccion = historial_listbox.curselection()
+    if not seleccion:
+        messagebox.showwarning("Seleccionar usuario", "Seleccione un nombre del historial.")
+        return
+
+    texto = historial_listbox.get(seleccion[0])
+    nombre = texto.split(" (")[0]
+
+    confirmar = messagebox.askyesno("Confirmar eliminación", f"¿Deseas eliminar todas las imágenes de '{nombre}'?")
+    if not confirmar:
+        return
+
+    # Eliminar archivos
+    archivos = os.listdir(CARPETA)
+    eliminados = 0
+    for archivo in archivos:
+        if archivo.startswith(nombre + "_") and archivo.endswith(".jpg"):
+            os.remove(os.path.join(CARPETA, archivo))
+            eliminados += 1
+
+    messagebox.showinfo("Eliminación exitosa", f"Se eliminaron {eliminados} imágenes de '{nombre}'.")
+    actualizar_historial()
+
 # Interfaz gráfica
 ventana = tk.Tk()
 ventana.title("Registro de Rostros")
@@ -63,9 +87,11 @@ label.pack(pady=10)
 entry_nombre = tk.Entry(ventana, width=30)
 entry_nombre.pack()
 
-# Botón
+# Botones
 btn = tk.Button(ventana, text="Registrar rostro", command=registrar)
 btn.pack(pady=10)
+btn_eliminar = tk.Button(ventana, text="Eliminar seleccionado", command=eliminar_usuario)
+btn_eliminar.pack(pady=5)
 
 # Historial
 tk.Label(ventana, text="Historial de registros:").pack(pady=5)
