@@ -87,3 +87,28 @@ def reconocer_rostro(frame, rostro_detectado):
             print(f"[?] Ninguna coincidencia aceptable (distancia mínima: {distancia_min:.2f})")
 
     return nombre_predicho
+
+def reconocer_rostro_mp(rostro, rostros_conocidos, umbral=0.35):
+    """
+    Compara un rostro detectado con los rostros conocidos usando DeepFace.
+    Retorna el nombre si hay coincidencia, sino "Desconocido".
+    """
+    try:
+        for nombre, imagen in rostros_conocidos.items():
+            # Prepara imágenes en formato RGB
+            rostro_rgb = cv2.cvtColor(rostro, cv2.COLOR_BGR2RGB)
+            imagen_rgb = cv2.cvtColor(imagen, cv2.COLOR_BGR2RGB)
+
+            resultado = DeepFace.verify(
+                rostro_rgb,
+                imagen_rgb,
+                enforce_detection=False,
+                model_name="Facenet",
+                distance_metric="cosine"
+            )
+
+            if resultado["verified"] and resultado["distance"] < umbral:
+                return nombre
+
+    except Exception as e:
+        print(f"[!] Error en reconocimiento: {e}")

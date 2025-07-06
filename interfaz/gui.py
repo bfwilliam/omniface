@@ -13,6 +13,15 @@ PROYECTO_RAIZ = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROYECTO_RAIZ not in sys.path:
     sys.path.insert(0, PROYECTO_RAIZ)
 
+from reconocedor.reconocedor import reconocer_rostro, reconocer_rostro_mp
+from utils.helpers import (
+    cargar_rostros_conocidos,
+    registrar_asistencia,
+    get_fecha_hora,
+    verificar_duplicado,
+    guardar_rostro_desconocido
+)
+
 from utils.helpers import cargar_rostros_conocidos
 
 
@@ -24,6 +33,7 @@ class App:
         self.root.resizable(False, False)
 
         self.running = False
+
         # Inicializar detector de rostros
         self.mp_face = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
@@ -33,7 +43,7 @@ class App:
         # Video frame
         self.video_label = ttk.Label(self.root)
         self.video_label.pack(pady=10)
-
+        
         # Botones
         self.btn_frame = ttk.Frame(self.root)
         self.btn_frame.pack()
@@ -48,8 +58,9 @@ class App:
         self.footer = ttk.Label(self.root, text="Proyecto de Reconocimiento Facial - IESTP JDS", font=("Segoe UI", 10))
         self.footer.pack(pady=10)
 
-        # Carga de rostros
+        # Carga de rostros y registro
         self.rostros_conocidos = cargar_rostros_conocidos()
+        self.rostros_detectados = set()
 
     def iniciar_camara(self):
         if not self.running:
@@ -67,37 +78,58 @@ class App:
 
     
     def mostrar_video(self):
-        while self.running and self.cap.isOpened():
-            ret, frame = self.cap.read()
-            if not ret:
-                continue
+        ret, frame = self.cap.read()
+        if not ret:
+            return
 
-            # Flip para efecto espejo (opcional)
-            frame = cv2.flip(frame, 1)
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        resultados = self.face_detection.process(frame_rgb)
 
-            # Conversión para Mediapipe
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = self.face_detection.process(rgb_frame)
+        if resultados.detections:
+            for detection in resultados.detections:
+                bbox = detection.location_data.relative_bounding_box
+                h, w, _ = frame.shape
+                x = int(bbox.xmin * w)
+                y = int(bbox.ymin * h)
+                ancho = int(bbox.width * w)
+                alto = int(bbox.height * h)
 
-            # Dibujar detecciones
-            if results.detections:
-                for detection in results.detections:
-                    bbox = detection.location_data.relative_bounding_box
-                    h, w, _ = frame.shape
-                    x, y = int(bbox.xmin * w), int(bbox.ymin * h)
-                    width, height = int(bbox.width * w), int(bbox.height * h)
-                    cv2.rectangle(frame, (x, y), (x + width, y + height), (0, 255, 0), 2)
+                # Recorte del rostro
+                rostro = frame[y:y+alto, x:x+ancho]
+                if rostro.size == 0:
+                    continue
 
-            # Convertir a imagen para Tkinter
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(frame)
-            imgtk = ImageTk.PhotoImage(image=img)
+                nombre = reconocer_rostro_mp(rostro, self.rostros_conocidos)
 
-            self.video_label.imgtk = imgtk
-            self.video_label.config(image=imgtk)
+                # Color del marco
+                color = (0, 255, 0) if nombre != "Desconocido" else (0, 0, 255)
 
-            time.sleep(0.03)  # ~30 FPS
+                # Evita duplicados
+                if nombre not in self.rostros_detectados:
+                    self.rostros_detectados.add(nombre)
+                    fecha, hora = get_fecha_hora()
+                    registrar_asistencia(nombre, fecha, hora)
+                    if nombre == "Desconocido":
+                        guardar_rostro_desconocido(rostro, fecha, hora)
 
+                # Dibuja el recuadro
+                cv2.rectangle(frame, (x, y), (x+ancho, y+alto), color, 2)
+                cv2.putText(frame, nombre, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+
+        # Fecha y hora
+        fecha, hora = get_fecha_hora()
+        cv2.putText(frame, f"{fecha} {hora}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+        # Mostrar en ventana Tkinter
+        imagen_tk = ImageTk.PhotoImage(image=Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+        self.video_label.imgtk = imagen_tk
+        self.video_label.configure(image=imagen_tk)
+
+        self.root.after(10, self.mostrar_video)
+
+    def __del__(self):
+        if self.cap.isOpened():
+            self.cap.release()
 
 # Ejecutar
 if __name__ == "__main__":
