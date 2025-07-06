@@ -100,7 +100,10 @@ class App:
                     continue
 
                 nombre = reconocer_rostro_mp(rostro, self.rostros_conocidos)
-
+                
+                if nombre is None or nombre.strip() == "":
+                    nombre = "Desconocido"
+                    
                 # Color del marco
                 color = (0, 255, 0) if nombre != "Desconocido" else (0, 0, 255)
 
