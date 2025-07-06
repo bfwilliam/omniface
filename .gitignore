@@ -1,0 +1,12 @@
+# Ignorar paquetes y entornos
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+.deepface/
+deepface/
+*.h5
+*.onnx
+*.pt
