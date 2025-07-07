@@ -14,16 +14,15 @@ if PROYECTO_RAIZ not in sys.path:
 from detectores.detector_mediapipe import detectar_rostros_mediapipe
 from utils.helpers import get_fecha_hora, registrar_asistencia, verificar_duplicado
 from reconocedor.reconocedor_mp import reconocer_rostro_mp
+from utils.gestor_embeddings import generar_embedding_individual, actualizar_embeddings
 
 class App:
     def __init__(self, ventana):
         self.ventana = ventana
         self.ventana.title("Sistema de Control de Presencia")
 
-        # Captura de video
         self.video = cv2.VideoCapture(0)
 
-        # Interfaz
         self.label_video = tk.Label(ventana)
         self.label_video.pack()
 
@@ -84,12 +83,10 @@ class App:
             messagebox.showwarning("Advertencia", "Ingrese un nombre válido.")
             return
 
-        # Crear carpeta si no existe
         carpeta = "rostros_conocidos"
         if not os.path.exists(carpeta):
             os.makedirs(carpeta)
 
-        # Capturar 3 imágenes
         capturas = []
         for i in range(3):
             ret, frame = self.video.read()
@@ -100,52 +97,20 @@ class App:
             ruta = os.path.join(carpeta, f"{nombre}_{i+1}.jpg")
             cv2.imwrite(ruta, frame)
             capturas.append(ruta)
-            print(f"[📸] Imagen {i+1} guardada: {ruta}")
             cv2.waitKey(300)
 
         messagebox.showinfo("Captura completa", f"Se guardaron 3 fotos de {nombre}.")
 
-        # Generar embedding promedio
-        try:
-            from deepface import DeepFace
-            import numpy as np
-            embeddings = []
-
-            print(f"\n[🧠] Generando embeddings para {nombre}...")
-            for ruta in capturas:
-                representacion = DeepFace.represent(img_path=ruta, model_name="Facenet", enforce_detection=False)
-                if representacion and isinstance(representacion, list):
-                    embedding = representacion[0].get("embedding")
-                    if embedding:
-                        embeddings.append(np.array(embedding))
-                        print(f"[✔] Embedding generado desde {ruta}")
-                    else:
-                        print(f"[!] Embedding vacío en {ruta}")
-                else:
-                    print(f"[!] No se detectó rostro en {ruta}")
-
-            if not embeddings:
-                messagebox.showerror("Error", "No se pudo generar ningún embedding. Intente nuevamente.")
-                return
-
-            embedding_promedio = np.mean(embeddings, axis=0)
-
-            # Guardar embedding
-            import pickle
-            with open("reconocedor/embeddings.pkl", "rb") as f:
-                data = pickle.load(f)
-
-            data[nombre] = embedding_promedio
-
-            with open("reconocedor/embeddings.pkl", "wb") as f:
-                pickle.dump(data, f)
-
-            print(f"[💾] Embedding promedio guardado como '{nombre}' en embeddings.pkl\n")
-            messagebox.showinfo("Éxito", "Embeddings actualizados correctamente.")
-
-        except Exception as e:
-            print(f"[❌] Error al generar el embedding para {nombre}: {e}")
-            messagebox.showerror("Error", f"No se pudo generar el embedding:\n{e}")
+        # Generar y actualizar embeddings usando el nuevo módulo
+        embedding = generar_embedding_individual(nombre, capturas)
+        if embedding is not None:
+            exito = actualizar_embeddings(nombre, embedding)
+            if exito:
+                messagebox.showinfo("Éxito", "Embeddings actualizados correctamente.")
+            else:
+                messagebox.showerror("Error", "No se pudo actualizar el archivo de embeddings.")
+        else:
+            messagebox.showerror("Error", "No se generaron embeddings válidos.")
 
     def __del__(self):
         if self.video.isOpened():
