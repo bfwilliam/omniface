@@ -100,7 +100,8 @@ class App:
             ruta = os.path.join(carpeta, f"{nombre}_{i+1}.jpg")
             cv2.imwrite(ruta, frame)
             capturas.append(ruta)
-            cv2.waitKey(300)  # espera breve entre capturas
+            print(f"[📸] Imagen {i+1} guardada: {ruta}")
+            cv2.waitKey(300)
 
         messagebox.showinfo("Captura completa", f"Se guardaron 3 fotos de {nombre}.")
 
@@ -110,12 +111,14 @@ class App:
             import numpy as np
             embeddings = []
 
+            print(f"\n[🧠] Generando embeddings para {nombre}...")
             for ruta in capturas:
                 representacion = DeepFace.represent(img_path=ruta, model_name="Facenet", enforce_detection=False)
                 if representacion and isinstance(representacion, list):
                     embedding = representacion[0].get("embedding")
                     if embedding:
                         embeddings.append(np.array(embedding))
+                        print(f"[✔] Embedding generado desde {ruta}")
                     else:
                         print(f"[!] Embedding vacío en {ruta}")
                 else:
@@ -137,13 +140,12 @@ class App:
             with open("reconocedor/embeddings.pkl", "wb") as f:
                 pickle.dump(data, f)
 
+            print(f"[💾] Embedding promedio guardado como '{nombre}' en embeddings.pkl\n")
             messagebox.showinfo("Éxito", "Embeddings actualizados correctamente.")
 
         except Exception as e:
+            print(f"[❌] Error al generar el embedding para {nombre}: {e}")
             messagebox.showerror("Error", f"No se pudo generar el embedding:\n{e}")
-
-
-
 
     def __del__(self):
         if self.video.isOpened():
