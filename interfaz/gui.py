@@ -80,37 +80,70 @@ class App:
 
     def capturar_rostro(self):
         nombre = self.entry_nombre.get().strip().lower()
-        if not nombre or nombre == "nombre del nuevo usuario":
+        if not nombre:
             messagebox.showwarning("Advertencia", "Ingrese un nombre válido.")
             return
 
-        ret, frame = self.video.read()
-        if not ret:
-            messagebox.showerror("Error", "No se pudo capturar la imagen.")
-            return
+        # Crear carpeta si no existe
+        carpeta = "rostros_conocidos"
+        if not os.path.exists(carpeta):
+            os.makedirs(carpeta)
 
-        # Detectar rostro para recortarlo
-        bbox = detectar_rostros_mediapipe(frame)
-        if not bbox:
-            messagebox.showwarning("Advertencia", "No se detectó ningún rostro.")
-            return
+        # Capturar 3 imágenes
+        capturas = []
+        for i in range(3):
+            ret, frame = self.video.read()
+            if not ret:
+                messagebox.showerror("Error", f"No se pudo capturar la imagen {i + 1}.")
+                return
 
-        x, y, w, h = bbox[0]
-        rostro_recortado = frame[y:y+h, x:x+w]
+            ruta = os.path.join(carpeta, f"{nombre}_{i+1}.jpg")
+            cv2.imwrite(ruta, frame)
+            capturas.append(ruta)
+            cv2.waitKey(300)  # espera breve entre capturas
 
-        os.makedirs("rostros_conocidos", exist_ok=True)
-        ruta_guardado = os.path.join("rostros_conocidos", f"{nombre}.jpg")
-        cv2.imwrite(ruta_guardado, rostro_recortado)
+        messagebox.showinfo("Captura completa", f"Se guardaron 3 fotos de {nombre}.")
 
-        messagebox.showinfo("Éxito", f"Rostro guardado como {nombre}.jpg")
-
-        # Regenerar embeddings
+        # Generar embedding promedio
         try:
-            from reconocedor.entrenar_embeds import generar_embeddings
-            generar_embeddings()
-            messagebox.showinfo("Embeddings", "Embeddings actualizados correctamente.")
+            from deepface import DeepFace
+            import numpy as np
+            embeddings = []
+
+            for ruta in capturas:
+                representacion = DeepFace.represent(img_path=ruta, model_name="Facenet", enforce_detection=False)
+                if representacion and isinstance(representacion, list):
+                    embedding = representacion[0].get("embedding")
+                    if embedding:
+                        embeddings.append(np.array(embedding))
+                    else:
+                        print(f"[!] Embedding vacío en {ruta}")
+                else:
+                    print(f"[!] No se detectó rostro en {ruta}")
+
+            if not embeddings:
+                messagebox.showerror("Error", "No se pudo generar ningún embedding. Intente nuevamente.")
+                return
+
+            embedding_promedio = np.mean(embeddings, axis=0)
+
+            # Guardar embedding
+            import pickle
+            with open("reconocedor/embeddings.pkl", "rb") as f:
+                data = pickle.load(f)
+
+            data[nombre] = embedding_promedio
+
+            with open("reconocedor/embeddings.pkl", "wb") as f:
+                pickle.dump(data, f)
+
+            messagebox.showinfo("Éxito", "Embeddings actualizados correctamente.")
+
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudieron actualizar los embeddings:\n{e}")
+            messagebox.showerror("Error", f"No se pudo generar el embedding:\n{e}")
+
+
+
 
     def __del__(self):
         if self.video.isOpened():
