@@ -1,16 +1,13 @@
-from datetime import datetime
 import os
-import pickle
 import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
-from tkinter import scrolledtext
 from PIL import Image, ImageTk
 import cv2
 import mediapipe as mp
 import numpy as np
 
-# Rutas y módulos personalizados
+# Agregar ruta raíz del proyecto
 PROYECTO_RAIZ = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROYECTO_RAIZ not in sys.path:
     sys.path.insert(0, PROYECTO_RAIZ)
@@ -18,15 +15,7 @@ if PROYECTO_RAIZ not in sys.path:
 from detectores.detector_mediapipe import detectar_rostros_mediapipe
 from utils.helpers import get_fecha_hora, registrar_asistencia, verificar_duplicado
 from reconocedor.reconocedor_mp import reconocer_rostro_mp
-
-EMBEDDINGS_PATH = "reconocedor/embeddings.pkl"
-
-# Asegurar archivo embeddings.pkl válido
-if not os.path.exists(EMBEDDINGS_PATH) or os.stat(EMBEDDINGS_PATH).st_size == 0:
-    with open(EMBEDDINGS_PATH, "wb") as f:
-        pickle.dump({}, f)
-from utils.gestor_embeddings import generar_embedding_individual, actualizar_embeddings
-
+from reconocedor.entrenar_embeds import generar_embeddings  # <- Entrenamiento centralizado
 
 class App:
     def __init__(self, ventana):
@@ -35,36 +24,18 @@ class App:
 
         self.video = cv2.VideoCapture(0)
 
+        # Interfaz de usuario
         self.label_video = tk.Label(ventana)
         self.label_video.pack()
 
-        self.entry_nombre = tk.Entry(self.ventana, width=30)
+        self.entry_nombre = tk.Entry(ventana, width=30)
         self.entry_nombre.pack(pady=5)
         self.entry_nombre.insert(0, "Nombre del nuevo usuario")
 
-        self.btn_capturar = tk.Button(self.ventana, text="📸 Capturar Rostro", command=self.capturar_rostro)
+        self.btn_capturar = tk.Button(ventana, text="📸 Capturar Rostro", command=self.capturar_rostro)
         self.btn_capturar.pack(pady=5)
 
-        # Área de log de eventos
-        self.area_log = scrolledtext.ScrolledText(self.ventana, width=60, height=10, state='disabled')
-        self.area_log.pack(padx=10, pady=10)
-        
-        self.btn_limpiar_logs = tk.Button(self.ventana, text="🧹 Limpiar Logs", command=self.limpiar_logs)
-        self.btn_limpiar_logs.pack()
-        
         self.mostrar_video()
-
-    def log_evento(self, mensaje):
-        self.area_log.configure(state='normal')
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.area_log.insert(tk.END, f"[{timestamp}] {mensaje}\n")
-        self.area_log.configure(state='disabled')
-        self.area_log.see(tk.END)
-    
-    def limpiar_logs(self):
-        self.area_log.config(state="normal")
-        self.area_log.delete(1.0, tk.END)
-        self.area_log.config(state="disabled")
 
     def mostrar_video(self):
         ret, frame = self.video.read()
@@ -73,7 +44,7 @@ class App:
             return
 
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        detector = mp.solutions.face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.6)
+        detector = mp.solutions.face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.8)
         resultados = detector.process(frame_rgb)
 
         if resultados.detections:
@@ -91,8 +62,7 @@ class App:
 
                 nombre, (x, y, w, h) = nombre_bbox
                 color = (0, 255, 0) if nombre != "Desconocido" else (0, 0, 255)
-                               
-                # Dibujo
+
                 cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
                 cv2.putText(frame, nombre, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
@@ -101,10 +71,8 @@ class App:
 
                 if not verificar_duplicado(nombre, fecha, hora):
                     registrar_asistencia(nombre, fecha, hora)
-                    self.log_evento(f"[🟢] Asistencia registrada: {nombre} - {fecha} {hora}")
-                else:
-                    self.log_evento(f"[ℹ️] Duplicado omitido: {nombre} - {fecha} {hora}")
 
+        # Mostrar en GUI
         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         imgtk = ImageTk.PhotoImage(image=img)
         self.label_video.imgtk = imgtk
@@ -119,28 +87,52 @@ class App:
             return
 
         carpeta = "rostros_conocidos"
-        if not os.path.exists(carpeta):
-            os.makedirs(carpeta)
+        os.makedirs(carpeta, exist_ok=True)
+
+        mp_face_detection = mp.solutions.face_detection
+        detector = mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7)
 
         capturas = []
-        for i in range(3):
-            ret, frame = self.video.read()
-            if not ret:
-                messagebox.showerror("Error", f"No se pudo capturar la imagen {i + 1}.")
-                return
+        intentos = 0
+        max_intentos = 7
 
-            ruta = os.path.join(carpeta, f"{nombre}_{i+1}.jpg")
-            cv2.imwrite(ruta, frame)
-            capturas.append(ruta)
-            self.log_evento(f"[📸] Imagen {i+1} guardada: {ruta}")
+        print(f"\n[📸] Iniciando captura de imágenes para '{nombre}'...")
+
+        while len(capturas) < 3 and intentos < max_intentos:
+            ret, frame = self.video.read()
+            intentos += 1
+
+            if not ret:
+                print(f"[✖] Intento {intentos}: error al leer frame.")
+                continue
+
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            resultado = detector.process(frame_rgb)
+
+            if resultado.detections:
+                ruta = os.path.join(carpeta, f"{nombre}_{len(capturas)+1}.jpg")
+                cv2.imwrite(ruta, frame)
+                capturas.append(ruta)
+                print(f"[✔] Imagen {len(capturas)} guardada: {ruta}")
+            else:
+                print(f"[!] Intento {intentos}: rostro no detectado.")
+
             cv2.waitKey(300)
 
-        messagebox.showinfo("Captura completa", f"Se guardaron 3 fotos de {nombre}.")
+        if len(capturas) < 3:
+            messagebox.showerror("Error", f"No se capturaron suficientes imágenes válidas. ({len(capturas)} de 3 requeridas)")
+            return
 
+        messagebox.showinfo("Captura completa", f"Se guardaron {len(capturas)} fotos de {nombre}.")
+
+        # --- Embeddings ---
         try:
             from deepface import DeepFace
+            import numpy as np
+            import pickle
+
+            print(f"\n[🧠] Generando embeddings para {nombre}...")
             embeddings = []
-            self.log_evento(f"\n[🧠] Generando embeddings para {nombre}...")
 
             for ruta in capturas:
                 representacion = DeepFace.represent(img_path=ruta, model_name="Facenet", enforce_detection=False)
@@ -148,31 +140,36 @@ class App:
                     embedding = representacion[0].get("embedding")
                     if embedding:
                         embeddings.append(np.array(embedding))
-                        self.log_evento(f"[✔] Embedding generado desde {ruta}")
+                        print(f"   - {os.path.basename(ruta)} [✔]")
                     else:
-                        self.log_evento(f"[!] Embedding vacío en {ruta}")
+                        print(f"   - {os.path.basename(ruta)} [✖] Embedding vacío")
                 else:
-                    self.log_evento(f"[!] No se detectó rostro en {ruta}")
+                    print(f"   - {os.path.basename(ruta)} [✖] Representación inválida")
 
             if not embeddings:
-                messagebox.showerror("Error", "No se pudo generar ningún embedding.")
+                messagebox.showerror("Error", "No se pudo generar ningún embedding. Intente nuevamente.")
                 return
 
             embedding_promedio = np.mean(embeddings, axis=0)
 
-            with open(EMBEDDINGS_PATH, "rb") as f:
-                data = pickle.load(f)
+            # Guardar en embeddings.pkl
+            embeddings_path = "reconocedor/embeddings.pkl"
+            if os.path.exists(embeddings_path):
+                with open(embeddings_path, "rb") as f:
+                    data = pickle.load(f)
+            else:
+                data = {}
 
             data[nombre] = embedding_promedio
 
-            with open(EMBEDDINGS_PATH, "wb") as f:
+            with open(embeddings_path, "wb") as f:
                 pickle.dump(data, f)
 
-            self.log_evento(f"[💾] Embedding promedio guardado como '{nombre}'")
+            print(f"[💾] Embedding de {nombre} actualizado en embeddings.pkl\n")
             messagebox.showinfo("Éxito", "Embeddings actualizados correctamente.")
 
         except Exception as e:
-            self.log_evento(f"[❌] Error al generar el embedding para {nombre}: {e}")
+            print(f"[❌] Error al generar embedding para {nombre}: {e}")
             messagebox.showerror("Error", f"No se pudo generar el embedding:\n{e}")
 
 
