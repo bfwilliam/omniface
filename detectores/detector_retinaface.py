@@ -3,7 +3,7 @@ import numpy as np
 from insightface.app import FaceAnalysis
 
 # Inicializamos el detector de rostros con insightface
-app = FaceAnalysis(providers=['CPUExecutionProvider'])  # Puedes usar 'CUDAExecutionProvider' si tienes GPU
+app = FaceAnalysis(providers=['CPUExecutionProvider'])  # Usa 'CUDAExecutionProvider' si tienes GPU
 app.prepare(ctx_id=0, det_size=(640, 640))
 
 def detectar_rostros_retinaface(frame):
@@ -23,17 +23,34 @@ def detectar_rostros_retinaface(frame):
         y = max(0, y1)
         ancho = x2 - x1
         alto = y2 - y1
-        rostros.append((x, y, ancho, alto))
+
+        # Obtener landmarks (5 puntos)
+        puntos = face.kps if hasattr(face, "kps") else []
+
+        rostros.append({
+            'bbox': (x, y, ancho, alto),
+            'landmarks': puntos
+        })
 
     return rostros
 
 def dibujar_rostros(frame, rostros, nombres=None):
-    for i, (x, y, w, h) in enumerate(rostros):
+    for i, rostro in enumerate(rostros):
+        x, y, w, h = rostro['bbox']
         color = (0, 255, 0)  # Verde por defecto
         if nombres and i < len(nombres) and "Desconocido" in nombres[i]:
             color = (0, 0, 255)  # Rojo para desconocido
 
+        # Dibujar bounding box
         cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+
+        # Dibujar nombre si existe
         if nombres and i < len(nombres):
             cv2.putText(frame, nombres[i], (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+        # Dibujar landmarks si existen
+        puntos = rostro.get('landmarks', [])
+        for (px, py) in puntos:
+            cv2.circle(frame, (int(px), int(py)), 2, (0, 0, 255), -1)  # Rojo
+
     return frame
